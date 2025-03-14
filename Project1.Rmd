@@ -46,12 +46,36 @@ cat("gas:", dim(gas), "\n")
 
 * The data in `daily` are collected over days, with information on different types of natural gas consumption (`consumption_small`, `consumption_industry`, `consumption_power`). Provide summaries of typical values for each of these three types of consumption.
 
+```{R}
+show_summary <- function(column_name) {
+  daily %>%
+    summarise(
+      column = column_name,
+      Min = min(daily[[column_name]], na.rm = TRUE),
+      Q1 = quantile(daily[[column_name]], 0.25, na.rm = TRUE),
+      Median = median(daily[[column_name]], na.rm = TRUE),
+      Mean = mean(daily[[column_name]], na.rm = TRUE),
+      Q3 = quantile(daily[[column_name]], 0.75, na.rm = TRUE),
+      Max = max(daily[[column_name]], na.rm = TRUE),
+      SD = sd(daily[[column_name]], na.rm = TRUE),
+      NAs = sum(is.na(daily[[column_name]]))
+    )
+}
+
+distributions = bind_rows(show_summary("consumption_small"), show_summary("consumption_industry"), show_summary("consumption_power"))
+
+print(distributions)
+```
+
 
 ### Task 3
 
 Answer some questions about the data in `daily`:
 
 * How many weeks do the data cover?
+```{R}
+
+```
 * What is the percentage change in the `consumption_*` variables (that is the last day minus the first day divided by the first day)?
 * What proportion of the days are marked as holidays?
 * For each month in each year, what was the year-month combination with the lowest median `consumption_power` value?
