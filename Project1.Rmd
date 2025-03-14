@@ -1,6 +1,6 @@
 ---
 title: "Project 1"
-author: "GROUP MEMBERS"
+author: "Noah Del Valle, Paul Vander Woude, Huaqi Wei"
 output: html_document
 ---
 
@@ -140,17 +140,28 @@ gas %>%
 
 * Write a predicate function that returns true if any value in vector is missing. Use this function to find columns with missing values in the `daily` column. Create a plot or table that shows how often patterns of missingness occur: are all of the missing values in the same rows or are the various columns missing data in different ways?
 
-```{R}
-contains_nas <- function(x) {
-  any(is.na(x))
-}
+```{r}
+# Predicate function that returns true if any value in vector is missing.
 
-daily %>%
-  select_if(contains_nas) %>%
-  mutate(across(everything(), ~ifelse(is.na(.), 1, 0))) %>%
-  group_by(across(everything())) %>%
-  summarise(count = n()) %>%
-  arrange(desc(count))
+has_missing <- function(x)any(is.na(x))
+
+# Finding columns with missing values in the 'daily` data set
+
+missing_cols <- sapply(daily, has_missing)
+
+cat("Columns with missing values:\n")
+print(names(daily)[missing_cols])
+
+# Table that shows how often patterns of missingness occur
+
+missing_per_row <- rowSums(is.na(daily))    # Count missing values per row
+
+missing_table <- as.data.frame(table(missing_per_row))
+colnames(missing_table) <- c("MissingValuesPerRow", "Frequency")
+
+# Print the table
+print(missing_table)
+
 ```
 
 ### Task 6

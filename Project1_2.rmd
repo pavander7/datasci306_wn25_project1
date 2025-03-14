@@ -1,0 +1,358 @@
+---
+title: "Project 1"
+author: "GROUP MEMBERS"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+```
+
+## Overview
+
+In the `data` directory of this project you will find the file from a paper published in *Nature Energy* titled [Natural gas savings in Germany during the 2022 energy crisis](https://www.nature.com/articles/s41560-023-01260-5). Here is the abstract of the article:
+
+> Russia curbed its natural gas supply to Europe in 2021 and 2022, creating a grave energy crisis. This Article empirically estimates the crisis response of natural gas consumers in Germany—for decades, the largest export market for Russian gas. Using a multiple regression model, we estimate the response of small consumers, industry and power stations separately, controlling for the nonlinear temperature-heating relationship, seasonality and trends. We find significant and substantial gas savings for all consumer groups, but with differences in timing and size. For instance, industry started reducing consumption as early as September 2021, while small consumers saved substantially only since March 2022. Across all sectors, gas consumption during the second half of 2022 was 23% below the temperature-adjusted baseline. We discuss the drivers behind these savings and draw conclusions on their role in coping with the crisis.
+
+Your job in this project falls into two categories:
+
+1. A set of **tasks** that your group must complete exactly
+2. A set of **objectives** that are more general in their approach.
+
+## Tasks
+
+### Task 1
+
+* Load two files. To work in the console, use the `Session -> Set Working Directory -> To Source File Location`.
+    * Call the first table `daily`: "./data/natural_gas_germany_daily.csv"
+    * Call the second table `gas`: "./data/dutch_ttf_natural_gas.csv". Be sure to properly import the `Date` column.
+    * Demonstrate that these have been loaded by showing the number of rows and columns in each table.
+    
+```{r} 
+# Read the first CSV file
+daily <- read_csv("natural_gas_germany_daily.csv")
+
+# Read the second CSV file, ensuring the Date column is correctly parsed
+gas <- read_csv("dutch_ttf_natural_gas.csv", col_types = cols(Date = col_date(format = "%Y-%m-%d")))
+
+# Display the number of rows and columns in each dataset
+cat("Dimensions of daily:", dim(daily), "\n")
+cat("Dimensions of gas:", dim(gas), "\n")
+```
+
+### Task 2
+
+* The data in `daily` are collected over days, with information on different types of natural gas consumption (`consumption_small`, `consumption_industry`, `consumption_power`). Provide summaries of typical values for each of these three types of consumption.
+
+```{r}
+# Summaries of typical values for the three types of consumption
+
+summary(daily[, c("consumption_small", "consumption_industry", "consumption_power")])
+```
+### Task 3
+
+Answer some questions about the data in `daily`:
+
+* How many weeks do the data cover?
+* What is the percentage change in the `consumption_*` variables (that is the last day minus the first day divided by the first day)?
+* What proportion of the days are marked as holidays?
+* For each month in each year, what was the year-month combination with the lowest median `consumption_power` value?
+
+```{r}
+
+# Ensuring 'date' column is of Date type
+daily$date <- as.Date(daily$date)
+
+# Calculating number of weeks
+num_weeks <- as.numeric(difftime(max(daily$date), min(daily$date), units = "weeks"))
+cat("Number of weeks covered:", num_weeks, "\n\n")
+
+# Defining the consumption variables
+consumption_vars <- c("consumption_small", "consumption_industry", "consumption_power")
+
+# Function to get first and last non-NA values using pull()
+get_first_last_valid <- function(data, column_name) {
+  non_na_values <- data %>%
+    filter(!is.na(.data[[column_name]])) %>%
+    arrange(date)  # Ensure ordering by date
+
+  # Extract first and last non-missing values
+  first_value <- non_na_values %>%
+    slice(1) %>%
+    pull(.data[[column_name]])
+
+  last_value <- non_na_values %>%
+    slice(n()) %>%
+    pull(.data[[column_name]])
+
+  return(c(first_value, last_value))
+}
+
+# Computing percentage change using first and last valid values
+percentage_changes <- sapply(consumption_vars, function(var) {
+  if (var %in% colnames(daily)) {
+    values <- get_first_last_valid(daily, var)
+    if (!is.na(values[1]) & !is.na(values[2])) {
+      return(((values[2] - values[1]) / values[1]) * 100)
+    } else {
+      return(NA)  
+    }
+  } else {
+    return(NA)  
+  }
+})
+
+
+# Printing the percentage changes for each consumption variable
+cat("Percentage change in the consumption variables:\n")
+print(percentage_changes)
+cat("\n") 
+
+
+# Computing proportion of days marked as holidays
+holiday_proportion <- mean(daily$holiday, na.rm = TRUE)
+
+# Printing the result
+cat("Proportion of days marked as holidays:", holiday_proportion, "\n\n")
+
+# Extract year-month
+daily$year_month <- format(daily$date, "%Y-%m")
+
+# Calculating median consumption for each year-month
+monthly_medians <- daily %>%
+  group_by(year_month) %>%
+  summarize(median_consumption_power = median(consumption_power, na.rm = TRUE)) %>%
+  arrange(median_consumption_power)
+
+# Getting the year-month with the lowest median
+lowest_median_month <- monthly_medians %>%
+  slice(1) %>%
+  pull(year_month)
+
+lowest_median_value <- monthly_medians %>%
+  slice(1) %>%
+  pull(median_consumption_power)
+
+# Print result
+cat("The year-month combination with the lowest median consumption_power value is:",
+    lowest_median_month, "with a median of", round(lowest_median_value, 4), "\n\n")
+
+```
+### Task 4
+
+* The original paper aggregated the data to monthly means for each consumption type in `daily` and the `Price` column of `gas` to produce the following image:<br/>
+![Original consumption by month graph](proj1fig1.png)<br/>
+Produce plots that show the same information that is presented in this plot. Your plots do not have to have the same colors or markings, but we should be able to use them to compare the trends for the three price variables. 
+
+
+### Task 5
+
+* Write a predicate function that returns true if any value in vector is missing. Use this function to find columns with missing values in the `daily` column. Create a plot or table that shows how often patterns of missingness occur: are all of the missing values in the same rows or are the various columns missing data in different ways?
+
+```{r}
+# Predicate function that returns true if any value in vector is missing.
+
+has_missing <- function(x)any(is.na(x))
+
+# Finding columns with missing values in the 'daily` data set
+
+missing_cols <- sapply(daily, has_missing)
+
+cat("Columns with missing values:\n")
+print(names(daily)[missing_cols])
+
+# Table that shows how often patterns of missingness occur
+
+missing_per_row <- rowSums(is.na(daily))    # Count missing values per row
+
+missing_table <- as.data.frame(table(missing_per_row))
+colnames(missing_table) <- c("MissingValuesPerRow", "Frequency")
+
+# Print the table
+print(missing_table)
+
+```
+
+### Task 6
+
+* Limit the `gas` table to days where the price exceeded the yearly median. Use the concept of [circular means](https://en.wikipedia.org/wiki/Circular_mean) to compute the average day of the year when price exceeds the yearly median price. The `yday` function will likely be useful here. 
+
+
+### Task 7
+
+* Using the cut function, create two nominal variables from quantitative data in the `daily` dataset. Use these groups to summarize the data. Use arrange to show the smallest or largest values in these comparisons.
+
+### Task 8
+
+* There are several variables that pull out data by different industry (the `_idx` columns). Create a table for these columns using `select` and the `ends_with` function. Provide two different plots that show of the relations between these variables (you do not need to have all variables in each plot).
+
+
+## Objectives
+
+### Objective 1
+
+* Produce at least five more figures. For each figure, write a brief caption explaining the plot and what you have learned from the plot. Each figure should attempt to provide new insight into the data set not included elsewhere
+    * A marginal distribution
+    * A joint distribution
+    * A plot of a summary measure such as a conditional mean
+    * A plot using `facet_wrap` or `facet_grid`
+    * A plot that shows seasonal effects before the crisis (September 2021 until October 2022)
+    
+```{r}
+####Marginal Distribution
+
+ggplot(gas, aes(x = Price)) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "black", alpha = 0.7) +
+  labs(title = "Marginal Distribution of Gas Prices",
+       x = "Gas Price (€ MWh⁻¹)", y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r}
+####A joint distribution
+
+ggplot(daily, aes(x = temperature, y = consumption_power)) +
+  geom_point(alpha = 0.5, color = "darkred") +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Temperature vs. Consumption Power",
+       x = "Temperature (°C)",
+       y = "Consumption Power (MWh)") +
+  theme_minimal()
+```
+### Objective 2
+
+* Compare and contrast holidays and non-holidays for household energy consumption. Select 3 ways of comparing these groups. Provide at least one graph.
+
+```{r}
+library(knitr)
+# Compute summary statistics for holidays and non-holidays
+summary_stats <- daily %>%
+  group_by(holiday) %>%
+  summarize(
+    mean_consumption = mean(consumption_small, na.rm = TRUE),
+    median_consumption = median(consumption_small, na.rm = TRUE),
+    sd_consumption = sd(consumption_small, na.rm = TRUE),
+    min_consumption = min(consumption_small, na.rm = TRUE),
+    max_consumption = max(consumption_small, na.rm = TRUE),
+
+  )
+
+# Print the summary statistics
+
+kable(summary_stats, caption = "Comparison of Household Gas Consumption on Holidays vs. Non-Holidays")
+```
+
+```{r}
+# Ensure 'holiday' column is a factor
+daily$holiday <- as.factor(daily$holiday)
+
+# Boxplot for household energy consumption
+ggplot(daily, aes(x = holiday, y = consumption_small, fill = holiday)) +
+  geom_boxplot() +
+  labs(title = "Household Gas Consumption on Holidays vs. Non-Holidays",
+       x = "Holiday Status",
+       y = "Gas Consumption (MWh)") +
+  theme_minimal()
+```
+```{r}
+ggplot(daily, aes(x = consumption_small, fill = holiday)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Density Plot of Household Gas Consumption",
+       x = "Gas Consumption (MWh)",
+       y = "Density",
+       fill = "Holiday Status") +
+  theme_minimal()
+```
+
+### Objective 3
+
+* According to the paper, the gas crisis occurred between September 2021 until October 2022. Compare this period with the periods before and after on household and industrial consumption. Write a paragraph explaining your findings.
+
+
+### Objective 4
+
+* Explore the [documentation for ggplot](https://ggplot2.tidyverse.org/). Select one geometery and one `stat_` function we have not used before or use an option to a previously used geometry/stat with a new option. Write a short paragraph explaining what the plots show.
+
+**Response**
+
+*The findings suggest that household gas consumption remains relatively stable between holidays and non-holidays, with only slight variations. There is no strong indication that holidays significantly reduce or increase household energy use. However, further statistical testing could confirm whether the observed differences are significant.*
+
+```{r}
+# Generate a violin plot for household gas consumption
+# comparing holidays and non-holidays with summary statistics
+ggplot(daily, aes(x = as.factor(holiday), y = consumption_small, fill = as.factor(holiday))) +
+  geom_violin(trim = FALSE, alpha = 0.5) +  # Violin plot with full density
+  stat_summary(fun = mean, geom = "point", shape = 20, size = 3, color = "black") +  # Overlay mean points
+  labs(
+    title = "Violin Plot of Household Gas Consumption on Holidays vs. Non-Holidays",
+    x = "Holiday Status (0 = Non-Holiday, 1 = Holiday)",
+    y = "Household Gas Consumption (MWh)",
+    fill = "Holiday Status"
+  ) +
+  theme_minimal()
+```
+
+### Objective 4
+
+* Investigate solar radiation's marginal distribution and also it's relationship with temperature.
+
+```{r}
+
+# Histogram for Solar Radiation's Marginal Distribution
+ggplot(daily, aes(x = solar_radiation)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "black", alpha = 0.7) +
+  labs(title = "Marginal Distribution of Solar Radiation",
+       x = "Solar Radiation",
+       y = "Frequency") +
+  theme_minimal()
+
+# Scatter Plot: Solar Radiation vs. Temperature
+ggplot(daily, aes(x = temperature, y = solar_radiation)) +
+  geom_point(alpha = 0.5, color = "darkred") +
+  geom_smooth(method = "lm", color = "blue", se = TRUE) + 
+  labs(title = "Relationship Between Solar Radiation and Temperature",
+       x = "Temperature (°C)",
+       y = "Solar Radiation") +
+  theme_minimal()
+
+```
+
+### Objective 5
+
+* Use `group_by` to summarize by a new feature of this data set not otherwise discussed in the tasks or objectives. What have you learned with these investigation?
+
+
+```{r}
+library(knitr)
+
+# Create a new feature: Weekend (1 for Saturday & Sunday, 0 for weekdays)
+daily <- daily %>%
+  mutate(weekend = ifelse(weekday %in% c("Saturday", "Sunday"), 1, 0))
+
+# Summarize household gas consumption by weekend vs. weekday
+weekday_summary <- daily %>%
+  group_by(weekend) %>%
+  summarize(
+    mean_consumption = mean(consumption_small, na.rm = TRUE),
+    median_consumption = median(consumption_small, na.rm = TRUE),
+    sd_consumption = sd(consumption_small, na.rm = TRUE),
+    min_consumption = min(consumption_small, na.rm = TRUE),
+    max_consumption = max(consumption_small, na.rm = TRUE)
+  )
+
+# Display as a formatted table
+kable(weekday_summary, caption = "Comparison of Household Gas Consumption on Weekdays vs. Weekends")
+
+```
+
+### Objective 6
+
+* Based on your exploration of the data, suggest three questions that could be asked from these data or additional data that you can imagine. Be sure to explain why the previous plots or calculations indicates that this would be an interesting our useful exploration.
+
+### Objective 7
+
+* Write an abstract for your project. Briefly explain what you did, what you found, and why a potential reader should be interested in your research.
+
