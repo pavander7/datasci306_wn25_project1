@@ -30,6 +30,17 @@ Your job in this project falls into two categories:
     * Call the second table `gas`: "./data/dutch_ttf_natural_gas.csv". Be sure to properly import the `Date` column.
     * Demonstrate that these have been loaded by showing the number of rows and columns in each table.
   
+```{R}
+daily <- read_csv("./data/natural_gas_germany_daily.csv", show_col_types = FALSE)
+gas <- read_csv("./data/dutch_ttf_natural_gas.csv", show_col_types = FALSE)
+
+daily <- daily %>% mutate(Date = ymd(date))
+gas <- gas %>% mutate(Date = mdy(Date))
+
+cat("Dimensions\n-----------------------\n")
+cat("daily:", dim(daily), "\n")
+cat("gas:", dim(gas), "\n")
+```
 
 ### Task 2
 
@@ -51,24 +62,154 @@ Answer some questions about the data in `daily`:
 ![Original consumption by month graph](proj1fig1.png)<br/>
 Produce plots that show the same information that is presented in this plot. Your plots do not have to have the same colors or markings, but we should be able to use them to compare the trends for the three price variables. 
 
+```{R}
+daily %>% 
+  select(Date, price_industry_idx, price_households_idx) %>%
+  ggplot(mapping = aes(x = Date)) +
+    geom_line(aes(y = price_industry_idx, color = "price_industry_idx"), size = 1) + 
+    geom_line(aes(y = price_households_idx, color = "price_households_idx"), size = 1) + 
+    labs(title = "Consumption by Month", x = "Date", y = "Natural gas price indices (2015 = 100)", color = "Legend") +
+    scale_x_date(date_breaks = "1 year", date_minor_breaks = "3 months", 
+                 date_labels = "%Y", limits = c(date("2019-01-01"), date("2023-01-01"))) + 
+    scale_y_continuous(breaks = seq(0, max(c(daily$price_industry_idx, 
+                                             daily$price_households_idx, 
+                                             gas$Price), na.rm = TRUE), by = 50)) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+gas %>% 
+  select(Date, Price) %>%
+  ggplot(mapping = aes(x = Date)) +
+    geom_line(aes(y = Price, color = "Price"), size = 1) + 
+    labs(title = "Consumption by Month", x = "Date", y = "Natural gas price TTF (€MWh^-1)", color = "Legend") +
+    scale_x_date(date_breaks = "1 year", date_minor_breaks = "3 months", 
+                 date_labels = "%Y", limits = c(date("2019-01-01"), date("2023-01-01"))) + 
+    scale_y_continuous(breaks = seq(0, max(c(daily$price_industry_idx, 
+                                             daily$price_households_idx, 
+                                             gas$Price), na.rm = TRUE), by = 25)) + 
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
 ### Task 5
 
 * Write a predicate function that returns true if any value in vector is missing. Use this function to find columns with missing values in the `daily` column. Create a plot or table that shows how often patterns of missingness occur: are all of the missing values in the same rows or are the various columns missing data in different ways?
 
+```{R}
+contains_nas <- function(x) {
+  any(is.na(x))
+}
 
+daily %>%
+  select_if(contains_nas) %>%
+  mutate(across(everything(), ~ifelse(is.na(.), 1, 0))) %>%
+  group_by(across(everything())) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+```
 
 ### Task 6
 
 * Limit the `gas` table to days where the price exceeded the yearly median. Use the concept of [circular means](https://en.wikipedia.org/wiki/Circular_mean) to compute the average day of the year when price exceeds the yearly median price. The `yday` function will likely be useful here. 
+
+```{R}
+# Calculate the yearly median price
+yearly_median <- gas %>%
+  mutate(Year = year(Date)) %>%
+  group_by(Year) %>%
+  summarise(median_price = median(Price, na.rm = TRUE))
+
+# Join the yearly median with the gas table and filter rows where price exceeds the median
+gas_filtered <- gas %>%
+  mutate(Year = lubridate::year(Date)) %>%
+  left_join(yearly_median, by = "Year") %>%
+  filter(Price > median_price) %>%
+  select(-Year, -median_price)  # Clean up extra columns
+
+# View the filtered table
+head(gas_filtered)
+```
+
+```{R}
+gas_filtered %>%
+  mutate(
+    yday = yday(Date),
+    radians = (yday * 2 * pi) / 365,
+    sin = sin(radians),
+    cos = cos(radians)
+  ) %>%
+  select(sin, cos) %>%
+  summarize(
+    sin_mean = mean(sin),
+    cos_mean = mean(cos)
+  ) %>%
+  summarize(
+    atan2 = atan2(sin_mean, cos_mean)
+  ) %>%
+  summarize(
+    average_day = round((atan2 * 365 / (2 * pi)) %% 365)
+  )
+```
 
 
 ### Task 7
 
 * Using the cut function, create two nominal variables from quantitative data in the `daily` dataset. Use these groups to summarize the data. Use arrange to show the smallest or largest values in these comparisons.
 
+```{R}
+# Create two nominal variables using the cut() function
+daily_summary <- daily %>%
+  mutate(
+    Price_households_group = cut(price_households_idx, breaks = 3, labels = c("Low", "Medium", "High")),
+    Price_industry_group = cut(price_industry_idx, breaks = 3, labels = c("Low", "Medium", "High"))
+  ) %>%
+  group_by(Price_households_group, Price_industry_group) %>%
+  summarise(
+    avg_price_households = mean(price_households_idx, na.rm = TRUE),
+    avg_price_industry = mean(price_industry_idx, na.rm = TRUE)
+  ) %>%
+  arrange(desc(avg_price_households), desc(avg_price_industry))
+
+# View the result
+print(daily_summary)
+```
+
 ### Task 8
 
 * There are several variables that pull out data by different industry (the `_idx` columns). Create a table for these columns using `select` and the `ends_with` function. Provide two different plots that show of the relations between these variables (you do not need to have all variables in each plot).
+
+```{R}
+daily_idx <- daily %>%
+  select(Date, ends_with('_idx'))
+
+daily_idx
+
+daily_idx %>%
+  ggplot(mapping = aes(x = Date)) + 
+    geom_line(mapping = aes(y = manufacturing_idx, color = "manufacturing_idx"), size = 1) +
+    geom_line(mapping = aes(y = hospitality_idx, color = "hospitality_idx"), size = 1) +
+    geom_line(mapping = aes(y = retail_idx, color = "retail_idx"), size = 1) +
+    #geom_line(mapping = aes(y = price_industry_idx, color = "price_industry_idx"), size = 1) +
+    #geom_line(mapping = aes(y = price_households_idx, color = "price_households_idx"), size = 1) +
+    scale_x_date(date_breaks = "3 months", 
+                 date_labels = "%b %Y") + 
+    labs(title = "Index Variables Over Time", x = "Date", y = "Index", color = "Legend") +
+    theme_minimal() + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+daily_idx %>%
+  select(where(is.numeric)) %>%
+  cor(use = "complete.obs") %>%
+  as.table() %>%
+  as.data.frame() %>%
+  filter(Var1 != Var2) %>%
+  ggplot(aes(x = Var1, y = Var2, fill = Freq)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Correlation Heatmap of Index Variables", x = "", y = "")
+```
 
 
 ## Objectives
