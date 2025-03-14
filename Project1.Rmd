@@ -74,11 +74,32 @@ Answer some questions about the data in `daily`:
 
 * How many weeks do the data cover?
 ```{R}
-
+range_weeks <- lubridate::interval(min(daily$Date, na.rm = TRUE), 
+                                   max(daily$Date, na.rm = TRUE)) / weeks(1)
+range_weeks
 ```
 * What is the percentage change in the `consumption_*` variables (that is the last day minus the first day divided by the first day)?
+```{R}
+daily %>%
+  summarize(across(starts_with("consumption_"), 
+                   ~ 100 * (last(., na_rm = TRUE) - first(., na_rm = TRUE)) / first(., na_rm = TRUE), 
+                   .names = "pct_change_{.col}"))
+```
 * What proportion of the days are marked as holidays?
+```{R}
+daily %>%
+  summarize(
+    holiday_proportion = sum(holiday)/length(date)
+  )
+```
 * For each month in each year, what was the year-month combination with the lowest median `consumption_power` value?
+```{R}
+daily %>%
+  mutate(YearMonth = format(Date, "%Y-%m")) %>%  # Extract Year-Month
+  group_by(YearMonth) %>%
+  summarize(MedianConsumption = median(consumption_power, na.rm = TRUE), .groups = "drop") %>%
+  slice_min(MedianConsumption, n = 1)  # Select the lowest median value
+```
    
 ### Task 4
 
