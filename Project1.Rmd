@@ -279,10 +279,75 @@ daily_idx %>%
     * A plot using `facet_wrap` or `facet_grid`
     * A plot that shows seasonal effects before the crisis (September 2021 until October 2022)
     
+```{r}
+####Marginal Distribution
+
+ggplot(gas, aes(x = Price)) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "black", alpha = 0.7) +
+  labs(title = "Marginal Distribution of Gas Prices",
+       x = "Gas Price (€ MWh⁻¹)", y = "Frequency") +
+  theme_minimal()
+```
+
+```{r}
+####A joint distribution
+
+ggplot(daily, aes(x = temperature, y = consumption_power)) +
+  geom_point(alpha = 0.5, color = "darkred") +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Temperature vs. Consumption Power",
+       x = "Temperature (°C)",
+       y = "Consumption Power (MWh)") +
+  theme_minimal()
+```
+
+
 
 ### Objective 2
 
 * Compare and contrast holidays and non-holidays for household energy consumption. Select 3 ways of comparing these groups. Provide at least one graph.
+
+```{r}
+library(knitr)
+# Compute summary statistics for holidays and non-holidays
+summary_stats <- daily %>%
+  group_by(holiday) %>%
+  summarize(
+    mean_consumption = mean(consumption_small, na.rm = TRUE),
+    median_consumption = median(consumption_small, na.rm = TRUE),
+    sd_consumption = sd(consumption_small, na.rm = TRUE),
+    min_consumption = min(consumption_small, na.rm = TRUE),
+    max_consumption = max(consumption_small, na.rm = TRUE),
+
+  )
+
+# Print the summary statistics
+
+kable(summary_stats, caption = "Comparison of Household Gas Consumption on Holidays vs. Non-Holidays")
+```
+
+```{r}
+# Ensure 'holiday' column is a factor
+daily$holiday <- as.factor(daily$holiday)
+
+# Boxplot for household energy consumption
+ggplot(daily, aes(x = holiday, y = consumption_small, fill = holiday)) +
+  geom_boxplot() +
+  labs(title = "Household Gas Consumption on Holidays vs. Non-Holidays",
+       x = "Holiday Status",
+       y = "Gas Consumption (MWh)") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(daily, aes(x = consumption_small, fill = holiday)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Density Plot of Household Gas Consumption",
+       x = "Gas Consumption (MWh)",
+       y = "Density",
+       fill = "Holiday Status") +
+  theme_minimal()
+```
 
 ### Objective 3
 
@@ -293,14 +358,76 @@ daily_idx %>%
 
 * Explore the [documentation for ggplot](https://ggplot2.tidyverse.org/). Select one geometery and one `stat_` function we have not used before or use an option to a previously used geometry/stat with a new option. Write a short paragraph explaining what the plots show. 
 
+**Response**
+
+*The findings suggest that household gas consumption remains relatively stable between holidays and non-holidays, with only slight variations. There is no strong indication that holidays significantly reduce or increase household energy use. However, further statistical testing could confirm whether the observed differences are significant.*
+
+```{r}
+# Generate a violin plot for household gas consumption
+# comparing holidays and non-holidays with summary statistics
+ggplot(daily, aes(x = as.factor(holiday), y = consumption_small, fill = as.factor(holiday))) +
+  geom_violin(trim = FALSE, alpha = 0.5) +  # Violin plot with full density
+  stat_summary(fun = mean, geom = "point", shape = 20, size = 3, color = "black") +  # Overlay mean points
+  labs(
+    title = "Violin Plot of Household Gas Consumption on Holidays vs. Non-Holidays",
+    x = "Holiday Status (0 = Non-Holiday, 1 = Holiday)",
+    y = "Household Gas Consumption (MWh)",
+    fill = "Holiday Status"
+  ) +
+  theme_minimal()
+```
+
 ### Objective 4
 
 * Investigate solar radiation's marginal distribution and also it's relationship with temperature.
 
+```{r}
+
+# Histogram for Solar Radiation's Marginal Distribution
+ggplot(daily, aes(x = solar_radiation)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "black", alpha = 0.7) +
+  labs(title = "Marginal Distribution of Solar Radiation",
+       x = "Solar Radiation",
+       y = "Frequency") +
+  theme_minimal()
+
+# Scatter Plot: Solar Radiation vs. Temperature
+ggplot(daily, aes(x = temperature, y = solar_radiation)) +
+  geom_point(alpha = 0.5, color = "darkred") +
+  geom_smooth(method = "lm", color = "blue", se = TRUE) + 
+  labs(title = "Relationship Between Solar Radiation and Temperature",
+       x = "Temperature (°C)",
+       y = "Solar Radiation") +
+  theme_minimal()
+
+```
 
 ### Objective 5
 
 * Use `group_by` to summarize by a new feature of this data set not otherwise discussed in the tasks or objectives. What have you learned with these investigation?
+
+```{r}
+library(knitr)
+
+# Create a new feature: Weekend (1 for Saturday & Sunday, 0 for weekdays)
+daily <- daily %>%
+  mutate(weekend = ifelse(weekday %in% c("Saturday", "Sunday"), 1, 0))
+
+# Summarize household gas consumption by weekend vs. weekday
+weekday_summary <- daily %>%
+  group_by(weekend) %>%
+  summarize(
+    mean_consumption = mean(consumption_small, na.rm = TRUE),
+    median_consumption = median(consumption_small, na.rm = TRUE),
+    sd_consumption = sd(consumption_small, na.rm = TRUE),
+    min_consumption = min(consumption_small, na.rm = TRUE),
+    max_consumption = max(consumption_small, na.rm = TRUE)
+  )
+
+# Display as a formatted table
+kable(weekday_summary, caption = "Comparison of Household Gas Consumption on Weekdays vs. Weekends")
+
+```
 
 ### Objective 6
 
